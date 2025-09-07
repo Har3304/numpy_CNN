@@ -5,10 +5,7 @@ import pickle
 from glob import glob
 from sklearn.model_selection import train_test_split
 
-# -----------------------------
-# Config
-# -----------------------------
-DATA_ROOT = r"F:/sm"        # expects subfolders: tri, circ, squ, rect
+DATA_ROOT = r"F:/sm"        
 IMG_SIZE = 64
 NUM_CLASSES = 4
 LR = 0.01
@@ -19,9 +16,6 @@ np.random.seed(SEED)
 
 LABEL_MAP = {"tri": 0, "circ": 1, "squ": 2, "rect": 3}
 
-# -----------------------------
-# Data loading
-# -----------------------------
 def load_dataset(data_root=DATA_ROOT, img_size=IMG_SIZE):
     X, y = [], []
     for name, label in LABEL_MAP.items():
@@ -44,9 +38,7 @@ def one_hot(y, num_classes=NUM_CLASSES):
     out[np.arange(y.shape[0]), y] = 1.0
     return out
 
-# -----------------------------
-# Layers (NumPy-only)
-# -----------------------------
+
 class Conv2D:
     """
     Naive convolution (NCHW) with stride=1, padding='valid'
@@ -64,13 +56,11 @@ class Conv2D:
         out_H = H - KH + 1
         out_W = W - KW + 1
         out = np.zeros((N, F, out_H, out_W), dtype=np.float32)
-
-        # naive loops
         for n in range(N):
             for f in range(F):
                 for i in range(out_H):
                     for j in range(out_W):
-                        region = x[n, :, i:i+KH, j:j+KW]  # (C, KH, KW)
+                        region = x[n, :, i:i+KH, j:j+KW]  
                         out[n, f, i, j] = np.sum(region * self.W[f]) + self.b[f]
         self.cache_shape = out.shape
         return out
@@ -93,8 +83,6 @@ class Conv2D:
                         region = x[n, :, i:i+KH, j:j+KW]
                         dW[f] += dout[n, f, i, j] * region
                         dx[n, :, i:i+KH, j:j+KW] += dout[n, f, i, j] * self.W[f]
-
-        # SGD update
         self.W -= lr * dW
         self.b -= lr * db
         return dx
@@ -108,16 +96,12 @@ class ReLU:
         return dout * self.mask
 
 class MaxPool2x2:
-    """
-    2x2 max-pooling, stride=2, no overlap
-    """
     def forward(self, x):
         self.x = x
         N, C, H, W = x.shape
-        assert H % 2 == 0 and W % 2 == 0, "H,W must be even for 2x2 pooling"
+        assert H % 2 == 0 and W % 2 == 0,
         out = x.reshape(N, C, H//2, 2, W//2, 2).max(axis=3).max(axis=4)
-
-        # store argmax mask for backward
+        
         self.mask = np.zeros_like(x, dtype=bool)
         for n in range(N):
             for c in range(C):
@@ -130,8 +114,7 @@ class MaxPool2x2:
 
     def backward(self, dout, lr):
         N, C, H, W = self.x.shape
-        dx = np.zeros_like(self.x)
-        # distribute dout to max positions
+        dx = np.zeros_like(self.x)        
         for n in range(N):
             for c in range(C):
                 for i in range(H//2):
@@ -148,8 +131,7 @@ class Flatten:
         return dout.reshape(self.x_shape)
 
 class Dense:
-    def __init__(self, in_dim, out_dim):
-        # He/Xavier-ish small init
+    def __init__(self, in_dim, out_dim):        
         scale = np.sqrt(2.0 / in_dim)
         self.W = (scale * np.random.randn(in_dim, out_dim)).astype(np.float32)
         self.b = np.zeros((out_dim,), dtype=np.float32)
@@ -161,44 +143,36 @@ class Dense:
     def backward(self, dout, lr):
         dW = self.x.T @ dout
         db = np.sum(dout, axis=0)
-        dx = dout @ self.W.T
-        # SGD
+        dx = dout @ self.W.T        
         self.W -= lr * dW
         self.b -= lr * db
         return dx
 
 class SoftmaxCrossEntropy:
     def forward(self, logits, y_true_onehot):
-        # logits: (N, K); y_true_onehot: (N, K)
         logits = logits - logits.max(axis=1, keepdims=True)
         exp = np.exp(logits)
         probs = exp / np.sum(exp, axis=1, keepdims=True)
         self.probs = probs
-        self.y = y_true_onehot
-        # cross-entropy
+        self.y = y_true_onehot        
         N = logits.shape[0]
         loss = -np.sum(y_true_onehot * np.log(probs + 1e-12)) / N
         return loss, probs
 
-    def backward(self):
-        # dL/dlogits = (probs - y) / N
+    def backward(self):       
         N = self.y.shape[0]
         return (self.probs - self.y) / N
 
-# -----------------------------
-# Model definition (NumPy CNN)
-# -----------------------------
 class NumPyCNN:
     def __init__(self, img_size=IMG_SIZE, num_classes=NUM_CLASSES):
-        # (N, 1, 64, 64)
         self.layers = [
-            Conv2D(1, 8, 5),   # -> (N, 8, 60, 60)
+            Conv2D(1, 8, 5),   
             ReLU(),
-            MaxPool2x2(),      # -> (N, 8, 30, 30)
-            Conv2D(8, 16, 3),  # -> (N, 16, 28, 28)
+            MaxPool2x2(),      
+            Conv2D(8, 16, 3),  
             ReLU(),
-            MaxPool2x2(),      # -> (N, 16, 14, 14)
-            Flatten(),         # -> (N, 16*14*14)
+            MaxPool2x2(),      
+            Flatten(),         
             Dense(16*14*14, 64),
             ReLU(),
             Dense(64, num_classes)
@@ -213,15 +187,13 @@ class NumPyCNN:
         return loss, probs, out
 
     def backward(self, lr):
-        dout = self.criterion.backward()
-        # backprop through layers in reverse
+        dout = self.criterion.backward()        
         for layer in reversed(self.layers):
             dout = layer.backward(dout, lr)
 
     def predict(self, x):
         out = x
         for layer in self.layers:
-            # forward without storing caches—ok for eval here
             out = layer.forward(out)
         probs = np.exp(out - out.max(axis=1, keepdims=True))
         probs = probs / np.sum(probs, axis=1, keepdims=True)
@@ -246,9 +218,7 @@ class NumPyCNN:
                 layer.W = state["W"]
             if "b" in state:
                 layer.b = state["b"]
-# -----------------------------
-# Training utilities
-# -----------------------------
+                
 def iterate_minibatches(X, Y, batch_size):
     idx = np.arange(X.shape[0])
     np.random.shuffle(idx)
@@ -260,9 +230,6 @@ def accuracy(model, X, y):
     preds = model.predict(X)
     return (preds == y).mean()
 
-# -----------------------------
-# Main
-# -----------------------------
 if __name__ == "__main__":
     X, y = load_dataset()
     print("Loaded:", X.shape, y.shape)
@@ -272,17 +239,16 @@ if __name__ == "__main__":
 
     model = NumPyCNN()
 
-    for ep in range(1, EPOCHS+1):
-        # train
+    for ep in range(1, EPOCHS+1):        
         losses = []
         for xb, yb in iterate_minibatches(X_train, Y_train_oh, BATCH_SIZE):
             loss, probs, logits = model.forward(xb, yb)
             model.backward(LR)
             losses.append(loss)
-
-        # evaluate
+        
         train_acc = accuracy(model, X_train, y_train)
         val_acc = accuracy(model, X_val, y_val)
         print(f"Epoch {ep:02d} | loss: {np.mean(losses):.4f} | train acc: {train_acc:.3f} | val acc: {val_acc:.3f}")
     model.save("cnn_weights.pkl")
     print("Weights saved.")
+
