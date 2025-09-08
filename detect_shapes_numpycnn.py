@@ -8,6 +8,7 @@ from sklearn.metrics import classification_report, accuracy_score
 import matplotlib.pyplot as plt
 from train_numpy_cnn import NumPyCNN, LABEL_MAP
 
+#Folder directories
 dict = {
     'tri': 0,
     'circ': 1,
@@ -137,4 +138,5 @@ y_pred_cnn = model.predict(inp)[0]
 for name, label in dict.items():    
     if label == y_pred_cnn:
         print(f"NumPyCNN prediction {name}")
+
  
