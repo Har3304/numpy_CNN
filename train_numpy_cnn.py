@@ -40,10 +40,6 @@ def one_hot(y, num_classes=NUM_CLASSES):
 
 
 class Conv2D:
-    """
-    Naive convolution (NCHW) with stride=1, padding='valid'
-    W: (F, C, KH, KW), b: (F,)
-    """
     def __init__(self, in_channels, out_channels, kernel_size):
         KH, KW = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size)
         self.W = 0.01 * np.random.randn(out_channels, in_channels, KH, KW).astype(np.float32)
@@ -251,4 +247,5 @@ if __name__ == "__main__":
         print(f"Epoch {ep:02d} | loss: {np.mean(losses):.4f} | train acc: {train_acc:.3f} | val acc: {val_acc:.3f}")
     model.save("cnn_weights.pkl")
     print("Weights saved.")
+
 
